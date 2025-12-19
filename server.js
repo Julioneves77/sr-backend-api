@@ -3,16 +3,19 @@ const express = require("express");
 const app = express();
 
 /**
- * Rota raiz
- * Usada para teste rápido via navegador
+ * Middleware para ler JSON
+ */
+app.use(express.json());
+
+/**
+ * Rota raiz – teste rápido
  */
 app.get("/", (req, res) => {
   res.status(200).send("sr-backend-api OK");
 });
 
 /**
- * Health check
- * Usado por Render, monitoramento e integrações futuras
+ * Health check – usado por Render, monitoramento e integrações
  */
 app.get("/health", (req, res) => {
   res.status(200).json({
@@ -24,7 +27,18 @@ app.get("/health", (req, res) => {
 });
 
 /**
- * Porta dinâmica (Render) ou fallback local
+ * Endpoint de teste (POST)
+ * Base para integrações futuras
+ */
+app.post("/api/test", (req, res) => {
+  res.status(200).json({
+    received: true,
+    data: req.body
+  });
+});
+
+/**
+ * Porta dinâmica (Render) ou local
  */
 const PORT = process.env.PORT || 3000;
 
