@@ -1,3 +1,4 @@
+// Auth debug enabled: logs tail/len/headerKeys for watched paths. Remove after fixing.
 const express = require("express");
 
 const app = express();
@@ -37,25 +38,80 @@ app.use((req, res, next) => {
   next();
 });
 
-// Auth middleware (exige x-api-key quando API_KEY está definido e request não é local)
+// ================== Auth middleware (PROD) ==================
+// Auth debug enabled: logs tail/len/headerKeys for watched paths. Remove after fixing.
+function isLocalHostHeader(host) {
+  if (!host) return false;
+  const h = String(host).toLowerCase();
+  return h.includes("localhost") || h.includes("127.0.0.1");
+}
+
+function shouldWatchPath(path) {
+  if (!path) return false;
+  if (path === "/api/test") return true;
+  if (path === "/api/tickets") return true;
+  if (path.startsWith("/api/tickets/")) return true;
+  return false;
+}
+
+function getApiKeyFromHeaders(req) {
+  // Tentar 3 formas de ler o header
+  const key1 = req.get("x-api-key");
+  const key2 = req.headers["x-api-key"];
+  const key3 = req.headers["X-Api-Key"];
+  
+  // Retornar a primeira não-vazia
+  if (key1 && String(key1).trim()) return key1;
+  if (key2 && String(key2).trim()) return key2;
+  if (key3 && String(key3).trim()) return key3;
+  return null;
+}
+
 app.use((req, res, next) => {
+  const expected = process.env.API_KEY; // setado no Render
+  const provided = getApiKeyFromHeaders(req);
   const host = req.headers.host || "";
-  const origin = req.headers.origin || "";
-  const referer = req.headers.referer || "";
-  const local = isLocalHost(host) || isLocalHost((origin || "").replace(/^https?:\/\//, "").split(":")[0]);
+  const watch = shouldWatchPath(req.path);
 
-  // Se API_KEY NÃO está setado, não exige (dev)
-  if (!API_KEY) return next();
+  // DEV: se não tem API_KEY, libera tudo
+  if (!expected) return next();
 
-  // Se estiver local (dev), também não exige para facilitar
-  if (local || origin.includes("localhost") || referer.includes("localhost")) return next();
+  // DEV: se é localhost, libera tudo
+  if (isLocalHostHeader(host)) return next();
 
-  const provided = req.headers["x-api-key"];
-  if (!provided || String(provided) !== String(API_KEY)) {
+  // PROD: exige x-api-key igual (normalizado)
+  const providedNormalized = provided ? String(provided).trim() : "";
+  const expectedNormalized = expected ? String(expected).trim() : "";
+  
+  // Preparar dados de debug (sempre para paths observados)
+  const debugInfo = {
+    method: req.method,
+    path: req.path,
+    host: host,
+    providedTail: providedNormalized ? providedNormalized.slice(-6) : "",
+    expectedTail: expectedNormalized ? expectedNormalized.slice(-6) : "",
+    providedLen: providedNormalized.length,
+    expectedLen: expectedNormalized.length,
+    hasProvided: !!providedNormalized,
+    headerKeys: Object.keys(req.headers).sort(),
+    rawProvidedSample: providedNormalized ? providedNormalized.slice(0, 2) : "",
+    rawExpectedSample: expectedNormalized ? expectedNormalized.slice(0, 2) : "",
+  };
+  
+  if (!providedNormalized || providedNormalized !== expectedNormalized) {
+    if (watch) {
+      console.log("[AUTH BLOCK]", debugInfo);
+    }
     return res.status(401).json({ success: false, error: "unauthorized" });
   }
-  next();
+
+  if (watch) {
+    console.log("[AUTH OK]", debugInfo);
+  }
+
+  return next();
 });
+// ============================================================
 
 // ============ In-memory store (test) ============
 let TICKETS = [];
@@ -148,9 +204,9 @@ app.get("/api/debug/tickets", (req, res) => {
   }
   
   // Em localhost/dev: permitir apenas se API_KEY estiver configurado E key fornecida
-  if (API_KEY) {
+  if (process.env.API_KEY) {
     const providedKey = req.query.key || "";
-    if (String(providedKey) !== String(API_KEY)) {
+    if (String(providedKey).trim() !== String(process.env.API_KEY).trim()) {
       return res.status(401).json({ success: false, error: "unauthorized" });
     }
   }
