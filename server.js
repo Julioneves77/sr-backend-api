@@ -4,7 +4,7 @@ const app = express();
 
 /**
  * Rota raiz
- * Usada para verificação simples de disponibilidade
+ * Usada para teste rápido via navegador
  */
 app.get("/", (req, res) => {
   res.status(200).send("sr-backend-api OK");
