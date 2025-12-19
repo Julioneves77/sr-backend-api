@@ -70,6 +70,18 @@ function getApiKeyFromHeaders(req) {
 app.use((req, res, next) => {
   const expected = process.env.API_KEY; // setado no Render
   const provided = getApiKeyFromHeaders(req);
+  
+  console.log("[AUTH DEBUG]", {
+    method: req.method,
+    path: req.path,
+    host: req.headers.host,
+    provided: provided,
+    expected: expected,
+    providedTrim: provided ? String(provided).trim() : null,
+    expectedTrim: expected ? String(expected).trim() : null,
+    headersKeys: Object.keys(req.headers || {}),
+  });
+  
   const host = req.headers.host || "";
   const watch = shouldWatchPath(req.path);
 
